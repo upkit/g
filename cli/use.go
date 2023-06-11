@@ -25,6 +25,16 @@ func use(ctx *cli.Context) (err error) {
 	if err = mkSymlink(targetV, goroot); err != nil {
 		return cli.Exit(errstring(err), 1)
 	}
+
+	// 如果开启了拷贝模式，重新拷贝一份新版本
+	if gcopy() {
+		_ = os.RemoveAll(copyroot)
+
+		if err = copyDir(targetV, copyroot); err != nil {
+			return cli.Exit(errstring(err), 1)
+		}
+	}
+
 	if output, err := exec.Command(filepath.Join(goroot, "bin", "go"), "version").Output(); err == nil {
 		fmt.Print(string(output))
 	}

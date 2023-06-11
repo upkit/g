@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -142,6 +143,16 @@ func install(ctx *cli.Context) (err error) {
 	if err = mkSymlink(targetV, goroot); err != nil {
 		return cli.Exit(errstring(err), 1)
 	}
+
+	// 如果开启了拷贝模式，重新拷贝一份新版本
+	if gcopy() {
+		_ = os.RemoveAll(copyroot)
+
+		if err = copyDir(targetV, copyroot); err != nil {
+			return cli.Exit(errstring(err), 1)
+		}
+	}
+
 	fmt.Printf("Now using go%s\n", v.Name)
 	return nil
 }
@@ -154,4 +165,82 @@ func mkSymlink(oldname, newname string) (err error) {
 		}
 	}
 	return os.Symlink(oldname, newname)
+}
+
+// copyDir 拷贝一个目录及其子目录和文件到另一个目录
+func copyDir(src string, dest string) error {
+	// 获取源目录的属性
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	// 创建目标目录
+	err = os.MkdirAll(dest, srcInfo.Mode())
+	if err != nil {
+		return err
+	}
+
+	// 读取源目录下的所有文件和子目录
+	dir, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		srcPath := filepath.Join(src, file.Name())
+		destPath := filepath.Join(dest, file.Name())
+
+		if file.IsDir() {
+			// 如果是子目录，递归拷贝
+			err = copyDir(srcPath, destPath)
+			if err != nil {
+				return err
+			}
+		} else {
+			// 如果是文件，直接拷贝
+			err = copyFile(srcPath, destPath)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// copyFile 拷贝一个文件到另一个文件
+func copyFile(src string, dest string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	destFile, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, srcFile) // 拷贝数据
+	if err != nil {
+		return err
+	}
+
+	srcInfo, err := os.Stat(src) // 获取源文件的属性
+	if err != nil {
+		return err
+	}
+	err = os.Chmod(dest, srcInfo.Mode()) // 设置目标文件的属性和源文件一致
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

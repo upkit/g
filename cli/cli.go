@@ -20,6 +20,7 @@ var (
 	downloadsDir string
 	versionsDir  string
 	goroot       string
+	copyroot     string
 )
 
 // Run 运行g命令行
@@ -36,6 +37,7 @@ func Run() {
 	app.Before = func(ctx *cli.Context) (err error) {
 		ghomeDir = ghome()
 		goroot = filepath.Join(ghomeDir, "go")
+		copyroot = filepath.Join(ghomeDir, "go_copy")
 		downloadsDir = filepath.Join(ghomeDir, "downloads")
 		if err = os.MkdirAll(downloadsDir, 0755); err != nil {
 			return err
@@ -85,6 +87,7 @@ const (
 	experimentalEnv = "G_EXPERIMENTAL"
 	homeEnv         = "G_HOME"
 	mirrorEnv       = "G_MIRROR"
+	copyEnv         = "G_COPY"
 )
 
 // ghome 返回g根目录
@@ -120,6 +123,11 @@ func render(curV string, items []*semver.Version, out io.Writer) {
 			fmt.Fprintf(out, "  %s\n", v)
 		}
 	}
+}
+
+// gcopy 返回g版本拷贝方式
+func gcopy() bool {
+	return strings.ToLower(os.Getenv(copyEnv)) == "true"
 }
 
 // errstring 返回统一格式的错误信息

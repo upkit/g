@@ -19,6 +19,12 @@ func uninstall(ctx *cli.Context) (err error) {
 		return cli.Exit(fmt.Sprintf("[g] %q version is not installed", vname), 1)
 	}
 
+	// 如果当前版本号是要卸载的版本
+	if inuse(goroot) == vname {
+		// 将拷贝的目录删除
+		_ = os.RemoveAll(copyroot)
+	}
+
 	if err = os.RemoveAll(targetV); err != nil {
 		return cli.Exit(wrapstring(fmt.Sprintf("Uninstall failed: %s", err.Error())), 1)
 	}

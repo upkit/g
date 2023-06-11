@@ -9,7 +9,7 @@ import (
 )
 
 func showEnv(ctx *cli.Context) (err error) {
-	var envVars = []string{experimentalEnv, homeEnv, mirrorEnv}
+	var envVars = []string{experimentalEnv, homeEnv, mirrorEnv, copyEnv}
 
 	for _, e := range envVars {
 		v, set := os.LookupEnv(e)
