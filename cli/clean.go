@@ -8,7 +8,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func clean(ctx *cli.Context) (err error) {
+func clean(*cli.Context) (err error) {
 	entries, err := os.ReadDir(downloadsDir)
 	if err != nil {
 		return cli.Exit(errstring(err), 1)
