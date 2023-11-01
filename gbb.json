@@ -5,11 +5,11 @@
     "variables": [
         {
             "variable": "Built",
-            "value": "{{.Date}}"
+            "value": "$(date '+%Y-%m-%d %H:%M:%S')"
         },
         {
             "variable": "GitCommit",
-            "value": "{{.GitCommit}}"
+            "value": "$(git rev-parse HEAD|cut -c 1-8)"
         },
         {
             "variable": "GitBranch",

@@ -4,20 +4,19 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
 )
 
-func showEnv(ctx *cli.Context) (err error) {
-	var envVars = []string{experimentalEnv, homeEnv, mirrorEnv, copyEnv}
+var envNames = []string{
+	homeEnv,
+	mirrorEnv,
+	experimentalEnv,
+	copyEnv,
+}
 
-	for _, e := range envVars {
-		v, set := os.LookupEnv(e)
-		if !set {
-			color.New(color.FgYellow).Fprintf(os.Stdout, "%s=(UNSET)\n", e)
-		} else {
-			fmt.Printf("%s=%s\n", e, v)
-		}
+func showEnv(ctx *cli.Context) (err error) {
+	for _, e := range envNames {
+		fmt.Printf("%s=%q\n", e, os.Getenv(e))
 	}
 	return nil
 }
