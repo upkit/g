@@ -1,16 +1,18 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/voidint/g/version"
 )
 
 func Test_ghome(t *testing.T) {
@@ -38,16 +40,55 @@ func Test_inuse(t *testing.T) {
 }
 
 func Test_render(t *testing.T) {
-	t.Run("渲染go版本列表", func(t *testing.T) {
-		var buf strings.Builder
-		v0, _ := semver.NewVersion("1.13-beta1")
-		v1, _ := semver.NewVersion("1.11.11")
-		v2, _ := semver.NewVersion("1.7.0")
-		v3, _ := semver.NewVersion("1.8.1")
-		items := []*semver.Version{v0, v1, v2, v3}
+	t.Run("渲染go版本列表(text)", func(t *testing.T) {
+		var got strings.Builder
+		items := []*version.Version{
+			version.MustNew("1.19beta1"),
+			version.MustNew("1.10beta2"),
+			version.MustNew("1.7"),
+			version.MustNew("1.8.1"),
+			version.MustNew("1.21.0"),
+			version.MustNew("1.21rc4"),
+		}
+		sort.Sort(version.Collection(items))
 
-		render(map[string]bool{"1.8.1": true}, items, &buf)
-		assert.Equal(t, "  1.7\n* 1.8.1\n  1.11.11\n  1.13beta1\n", buf.String())
+		render(textMode, map[string]bool{"1.8.1": true}, items, &got)
+		assert.Equal(t, "  1.7\n* 1.8.1\n  1.10beta2\n  1.19beta1\n  1.21rc4\n  1.21.0\n", got.String())
+	})
+
+	t.Run("渲染go版本列表(json)", func(t *testing.T) {
+		var actual strings.Builder
+		items := []*version.Version{
+			version.MustNew("1.19beta1"),
+			version.MustNew("1.10beta2"),
+			version.MustNew("1.7"),
+			version.MustNew("1.8.1"),
+			version.MustNew("1.21.0"),
+			version.MustNew("1.21rc4"),
+		}
+		sort.Sort(version.Collection(items))
+
+		installed := map[string]bool{"1.8.1": true}
+		render(jsonMode, installed, items, &actual)
+
+		vs := make([]versionOut, 0, len(items))
+		for _, item := range items {
+			vo := versionOut{
+				Version:  item.Name(),
+				Packages: item.Packages(),
+			}
+			if inuse, found := installed[item.Name()]; found {
+				vo.InUse = inuse
+				vo.Installed = found
+			}
+			vs = append(vs, vo)
+		}
+
+		var expected strings.Builder
+		enc := json.NewEncoder(&expected)
+		enc.SetIndent("", "    ")
+		_ = enc.Encode(&vs)
+		assert.Equal(t, expected.String(), actual.String())
 	})
 }
 

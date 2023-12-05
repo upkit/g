@@ -1,18 +1,20 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
-	"github.com/voidint/g/internal/build"
+	"github.com/voidint/g/build"
+	"github.com/voidint/g/version"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var (
@@ -39,11 +41,11 @@ func Run() {
 		goroot = filepath.Join(ghomeDir, "go")
 		copyroot = filepath.Join(ghomeDir, "go_copy")
 		downloadsDir = filepath.Join(ghomeDir, "downloads")
-		if err = os.MkdirAll(downloadsDir, 0755); err != nil {
+		if err = os.MkdirAll(downloadsDir, 0750); err != nil {
 			return err
 		}
 		versionsDir = filepath.Join(ghomeDir, "versions")
-		return os.MkdirAll(versionsDir, 0755)
+		return os.MkdirAll(versionsDir, 0750)
 	}
 	app.Commands = commands
 
@@ -92,7 +94,7 @@ const (
 
 // ghome 返回g根目录
 func ghome() (dir string) {
-	if experimental := os.Getenv(experimentalEnv); experimental == "true" {
+	if experimental := os.Getenv(experimentalEnv); strings.EqualFold(experimental, "true") {
 		if dir = os.Getenv(homeEnv); dir != "" {
 			return dir
 		}
@@ -121,41 +123,57 @@ func installed() (versions map[string]bool) {
 			continue
 		}
 		vname := d.Name()
-		v, err := semversioned(vname)
-		if err != nil || v == nil {
-			continue
-		}
-
 		versions[vname] = (vname == inused)
 	}
 
 	return
 }
 
-var go1_21_0 = semver.MustParse("1.21.0") // https://github.com/golang/go/issues/57631
+type versionOut struct {
+	Version   string            `json:"version"`
+	InUse     bool              `json:"inUse"`
+	Installed bool              `json:"installed"`
+	Packages  []version.Package `json:"packages,omitempty"`
+}
+
+const (
+	textMode = 0
+	jsonMode = 1
+)
 
 // render 渲染go版本列表
-func render(installed map[string]bool, items []*semver.Version, out io.Writer) {
-	sort.Sort(semver.Collection(items))
+func render(mode uint8, installed map[string]bool, items []*version.Version, out io.Writer) {
+	switch mode {
+	case jsonMode:
+		vs := make([]versionOut, 0, len(items))
 
-	for i := range items {
-		fields := strings.SplitN(items[i].String(), "-", 2)
-
-		v := fields[0]
-		if items[i].LessThan(go1_21_0) {
-			v = strings.TrimSuffix(strings.TrimSuffix(v, ".0"), ".0")
-		}
-		if len(fields) > 1 {
-			v += fields[1]
-		}
-		if inused, found := installed[v]; found {
-			if inused {
-				color.New(color.FgGreen).Fprintf(out, "* %s\n", v)
-			} else {
-				color.New(color.FgGreen).Fprintf(out, "  %s\n", v)
+		for _, item := range items {
+			vo := versionOut{
+				Version:  item.Name(),
+				Packages: item.Packages(),
 			}
-		} else {
-			fmt.Fprintf(out, "  %s\n", v)
+			if inuse, found := installed[item.Name()]; found {
+				vo.InUse = inuse
+				vo.Installed = found
+			}
+			vs = append(vs, vo)
+		}
+
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "    ")
+		_ = enc.Encode(&vs)
+
+	default:
+		for _, item := range items {
+			if inused, found := installed[item.Name()]; found {
+				if inused {
+					_, _ = color.New(color.FgGreen).Fprintf(out, "* %s\n", item.Name())
+				} else {
+					_, _ = color.New(color.FgGreen).Fprintf(out, "  %s\n", item.Name())
+				}
+			} else {
+				_, _ = fmt.Fprintf(out, "  %s\n", item.Name())
+			}
 		}
 	}
 }
@@ -163,23 +181,6 @@ func render(installed map[string]bool, items []*semver.Version, out io.Writer) {
 // gcopy 返回g版本拷贝方式
 func gcopy() bool {
 	return strings.ToLower(os.Getenv(copyEnv)) == "true"
-}
-
-func semversioned(vname string) (*semver.Version, error) {
-	var idx int
-	if strings.Contains(vname, "alpha") {
-		idx = strings.Index(vname, "alpha")
-
-	} else if strings.Contains(vname, "beta") {
-		idx = strings.Index(vname, "beta")
-
-	} else if strings.Contains(vname, "rc") {
-		idx = strings.Index(vname, "rc")
-	}
-	if idx > 0 {
-		vname = vname[:idx] + "-" + vname[idx:]
-	}
-	return semver.NewVersion(vname)
 }
 
 // errstring 返回统一格式的错误信息
@@ -196,7 +197,7 @@ func wrapstring(str string) string {
 	}
 	words := strings.Fields(str)
 	if len(words) > 0 {
-		words[0] = strings.Title(words[0])
+		words[0] = cases.Title(language.English).String(words[0])
 	}
 	return fmt.Sprintf("[g] %s", strings.Join(words, " "))
 }

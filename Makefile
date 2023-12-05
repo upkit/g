@@ -2,10 +2,10 @@ GO = CGO_ENABLED=0 GO111MODULE=on GOPROXY=https://goproxy.cn,direct go
 BUILD_DATE := $(shell date '+%Y-%m-%d %H:%M:%S')
 GIT_BRANCH := $(shell git symbolic-ref --short -q HEAD)
 GIT_COMMIT_HASH := $(shell git rev-parse HEAD|cut -c 1-8) 
-GO_FLAGS := -v -ldflags="-X 'github.com/voidint/g/internal/build.Built=$(BUILD_DATE)' -X 'github.com/voidint/g/internal/build.GitCommit=$(GIT_COMMIT_HASH)' -X 'github.com/voidint/g/internal/build.GitBranch=$(GIT_BRANCH)'"
+GO_FLAGS := -v -ldflags="-X 'github.com/voidint/g/build.Built=$(BUILD_DATE)' -X 'github.com/voidint/g/build.GitCommit=$(GIT_COMMIT_HASH)' -X 'github.com/voidint/g/build.GitBranch=$(GIT_BRANCH)'"
 
 
-all: install test clean
+all: install lint test clean
 
 build:
 	$(GO) build $(GO_FLAGS)
@@ -48,12 +48,31 @@ build-windows-arm64:
 package:
 	sh ./package.sh
 
+install-tools:
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install honnef.co/go/tools/cmd/staticcheck@2023.1
+	go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+lint: install-tools
+	go vet ./...
+	golangci-lint run ./...
+	staticcheck ./...
+	gosec -exclude=G107,G204,G304,G401,G505 -quiet ./...
+
 test:
-	$(GO) test -v ./...
+	go test -v -gcflags=all=-l ./...
+
+test-coverage:
+	go test -gcflags=all=-l -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+view-coverage: test-coverage
+	go tool cover -html=coverage.txt
+	rm -f coverage.txt
 
 clean:
 	$(GO) clean -x
 	rm -f sha256sum.txt
 	rm -rf bin
+	rm -f coverage.txt
 
-.PHONY: all build install test package clean build-linux build-darwin build-windows build-linux-386 build-linux-amd64 build-linux-arm build-linux-arm64 build-linux-s390x build-darwin-amd64 build-darwin-arm64 build-windows-386 build-windows-amd64 build-windows-arm build-windows-arm64
+.PHONY: all build install install-tools lint test test-coverage view-coverage package clean build-linux build-darwin build-windows build-linux-386 build-linux-amd64 build-linux-arm build-linux-arm64 build-linux-s390x build-darwin-amd64 build-darwin-arm64 build-windows-386 build-windows-amd64 build-windows-arm build-windows-arm64
