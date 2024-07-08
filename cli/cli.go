@@ -92,6 +92,11 @@ const (
 	copyEnv         = "G_COPY"
 )
 
+const (
+	// mirror site separator
+	mirrorSep = ","
+)
+
 // ghome 返回g根目录
 func ghome() (dir string) {
 	if experimental := os.Getenv(experimentalEnv); strings.EqualFold(experimental, "true") {
